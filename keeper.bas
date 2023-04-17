@@ -1,3 +1,4 @@
+    include 6lives.asm
     set romsize 4k
     set kernel_options no_blank_lines ; no_blank_lines means we lose missile0
     set optimization speed
@@ -56,15 +57,6 @@ __Start_Restart
     dim _ball_vel_x = c
     dim _ball_vel_y = d
 
-    ;***************************************************************
-    ;
-    ;  Defines the edges of the playfield for the ball. If the
-    ;  ball is a different size, you'll need to adjust the numbers.
-    ;
-    const _B_Edge_Top = 2
-    const _B_Edge_Bottom = 88
-    const _B_Edge_Left = 2
-    const _B_Edge_Right = 160
 
     ;***************************************************************
     ;
@@ -83,12 +75,10 @@ __Start_Restart
     dim _collision_countdown_1 = u
 
     ;***************************************************************
-    ; starting positions for ball (meteoroid) and two raindrops
-    ; all are off-screen so their movement routines will randomize
-    ; their starting locations in the game loop
+    ; starting positions for ball
 
-    ballx = 50
-    bally = 50
+    ballx = 71
+    bally = 40
     ballheight = 2
 
     ;***************************************************************
@@ -103,12 +93,49 @@ __Start_Restart
 
     ;***************************************************************
     ;
-    ;  Bally starting direction is down.
+    ;  Bally starting direction is random as well.
     ;
-    _Bit1_Ball_Dir_Down{1} = 1
+    _Bit1_Ball_Dir_Down{1} = 1 : _Bit0_Ball_Dir_Up{0} = 0
+
+    if temp5 < 128 then _Bit1_Ball_Dir_Down{1} = 0 : _Bit0_Ball_Dir_Up{0} = 1
 
     ; require the fire button to be pressed to start the game
     dim _game_started = w
+
+    ; variable for the ball speed increase
+    dim _ratio = k.l
+    _ratio = 0.51
+    dim _ratio_increases = v
+    _ratio_increases = 0
+
+    ; variable for time since fire was pressed
+    dim _fire_time = e
+    _fire_time = 0
+    dim _fire_time_late = q
+    _fire_time_late = 40
+
+    ; variable for counting how long since you lost a life
+    dim _life_loss_counter = f
+    _life_loss_counter = 0
+
+    dim _life_loss_reset = g
+    g = 0
+
+    ; initiate lives to 3 and use the compact spacing
+    dim lives_compact = 1
+    lives = 96
+
+    ; set lives sprite to a little heart
+ lives:
+   %00010000
+   %00111000
+   %01111100
+   %11111110
+   %11111110
+   %01101100
+   %00000000
+   %00000000
+end
 
  ; Xs are playfield color (green) and dots are background color (black)
  playfield:
@@ -126,6 +153,9 @@ __Start_Restart
 end
 
 gameloop
+    if lives < 32 then goto gameover_loop
+    ; reset game state when new life starts
+    if _life_loss_reset > 0 then ballx = 71 : bally = 40 : _ratio = 0.25 : _ratio_increases = 0 : _fire_time = 0 : _life_loss_reset = 0
     ;***************************************************************
     ; these values are set to 4 when either raindrop collides with
     ; the planet and count down each frame to zero. When they are
@@ -142,9 +172,11 @@ __Skip_Quiet
     ; color of player 1 (raindrop on left/right) and missile 1 (raindrop on top/bottom)
     COLUP1 = $BF
     ; color of playfield and ball
-    COLUPF = $C4
+    COLUPF = $AA
     ; missile 1 is two pixels wide and there is only one of them
     NUSIZ1 = $10
+    ; color of lives indicator
+    lifecolor = $FF
     drawscreen
 
     ; don't just start the game until the player presses the button
@@ -153,7 +185,7 @@ __Skip_Quiet
 
     ;***************************************************************
     ;
-    ;  Clears screen without clearing var44 through var47 (bottom line), is more efficient than pfclear apparently
+    ;  Clears screen without clearing var44 through var47 (bottom line), is more cycle-efficient than pfclear apparently
     ;
     var0 = 0 : var1 = 0 : var2 = 0 : var3 = 0 : var4 = 0 : var5 = 0
     var6 = 0 : var7 = 0 : var8 = 0 : var9 = 0 : var10 = 0 : var11 = 0
@@ -165,6 +197,8 @@ __Skip_Quiet
     var42 = 0 : var43 = 0
 
     ; use joystick location to determine playfield shape, represented here as a phone keypad position
+    if !joy0fire then _fire_time = 0 : goto _Pf_5
+    _fire_time = _fire_time + 1
     if joy0left && joy0up then goto _Pf_1
     if joy0up && !joy0left && !joy0right then goto _Pf_2
     if joy0up && joy0right then goto _Pf_3
@@ -326,8 +360,8 @@ _End_Pf
     ; Ball is on screen within the bounds of the keeper
     if bally > _B_Edge_Top + 6 && bally < _B_Edge_Bottom - 6 && ballx > _B_Edge_Left + 17 && ballx < _B_Edge_Right - 17 then goto __Ball_In_Play
     ; Ball has hit the edge of the screen, causing a loss of life
-    if bally <= _B_Edge_Top || bally >= _B_Edge_Bottom then goto gameover_loop ; TODO create small loss of life/reset routine
-    if ballx <= _B_Edge_Left || ballx >= _B_Edge_Right then goto gameover_loop
+    if bally <= _B_Edge_Top || bally >= _B_Edge_Bottom then lives = lives - 32 : goto __Life_Loss
+    if ballx <= _B_Edge_Left || ballx >= _B_Edge_Right then lives = lives - 32 : goto __Life_Loss
 
     if !_Bit0_Ball_Dir_Up{0} then goto __Skip_Dead_Ball_Up
     _B_Y = _B_Y - 0.50
@@ -381,7 +415,7 @@ __Ball_In_Play
    ;```````````````````````````````````````````````````````````````
    ;  Moves ball up and skips the rest of this section.
    ;
-   _B_Y = _B_Y - 1.00 : goto __Skip_Ball_Up
+   _B_Y = _B_Y - _ratio : goto __Skip_Ball_Up
 
    ;,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
    ;```````````````````````````````````````````````````````````````
@@ -398,9 +432,20 @@ __Reverse_Ball_Up
    temp5 = rand : if temp5 < 128 then _B_Y = _B_Y + 0.130
 
    ;```````````````````````````````````````````````````````````````
+   ; Increases speed if fire time was too early. Decreases if it was on time
+   ;
+
+    if _fire_time >= _fire_time_late && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : goto __Skip_Slow_Up
+    if _fire_time < _fire_time_late && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25
+__Skip_Slow_Up
+    
+
+   ;```````````````````````````````````````````````````````````````
    ;  Reverses the direction bits.
    ;
    _Bit0_Ball_Dir_Up{0} = 0 : _Bit1_Ball_Dir_Down{1} = 1
+
+   score = score + 1
 
 __Skip_Ball_Up
 
@@ -432,7 +477,7 @@ __Skip_Ball_Up
    ;```````````````````````````````````````````````````````````````
    ;  Moves ball down and skips the rest of this section.
    ;
-   _B_Y = _B_Y + 1.00 : goto __Skip_Ball_Down
+   _B_Y = _B_Y + _ratio : goto __Skip_Ball_Down
 
    ;,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
    ;```````````````````````````````````````````````````````````````
@@ -449,9 +494,19 @@ __Reverse_Ball_Down
    temp5 = rand : if temp5 < 128 then _B_Y = _B_Y - 0.261
 
    ;```````````````````````````````````````````````````````````````
+   ; Increases speed if fire time was too early. Decreases if it was on time
+   ;
+
+    if _fire_time >= _fire_time_late && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : goto __Skip_Slow_Down
+    if _fire_time < _fire_time_late && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25
+__Skip_Slow_Down
+
+   ;```````````````````````````````````````````````````````````````
    ;  Reverses the direction bits.
    ;
    _Bit0_Ball_Dir_Up{0} = 1 : _Bit1_Ball_Dir_Down{1} = 0
+
+   score = score + 1
 
 __Skip_Ball_Down
 
@@ -483,7 +538,7 @@ __Skip_Ball_Down
    ;```````````````````````````````````````````````````````````````
    ;  Moves ball left and skips the rest of this section.
    ;
-   _B_X = _B_X - 1.00 : goto __Skip_Ball_Left
+   _B_X = _B_X - _ratio : goto __Skip_Ball_Left
 
    ;,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
    ;```````````````````````````````````````````````````````````````
@@ -505,16 +560,26 @@ __Reverse_Ball_Left
    temp5 = rand : if temp5 < 128 then _B_X = _B_X + 0.388
 
    ;```````````````````````````````````````````````````````````````
+   ; Increases speed if fire time was too early. Decreases if it was on time
+   ;
+
+    if _fire_time >= _fire_time_late && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : goto __Skip_Slow_Left
+    if _fire_time < _fire_time_late && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25
+__Skip_Slow_Left
+
+   ;```````````````````````````````````````````````````````````````
    ;  Reverses the direction bits.
    ;
    _Bit2_Ball_Dir_Left{2} = 0 : _Bit3_Ball_Dir_Right{3} = 1
+
+    score = score + 1
 
 __Skip_Ball_Left
 
 
 
    ;***************************************************************
-   ;temp5
+   ;
    ;  Ball right check.
    ;
    ;```````````````````````````````````````````````````````````````
@@ -539,7 +604,7 @@ __Skip_Ball_Left
    ;```````````````````````````````````````````````````````````````
    ;  Moves ball right and skips the rest of this section.
    ;
-   _B_X = _B_X + 1.00 : goto __Skip_Ball_Right
+   _B_X = _B_X + _ratio : goto __Skip_Ball_Right
 
    ;,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
    ;```````````````````````````````````````````````````````````````
@@ -561,13 +626,21 @@ __Reverse_Ball_Right
    temp5 = rand : if temp5 < 128 then _B_X = _B_X - 0.513
 
    ;```````````````````````````````````````````````````````````````
+   ; Increases speed if fire time was too early. Decreases if it was on time
+   ;
+
+    if _fire_time >= _fire_time_late && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : goto __Skip_Slow_Right
+    if _fire_time < _fire_time_late && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25
+__Skip_Slow_Right
+
+   ;```````````````````````````````````````````````````````````````
    ;  Reverses the direction bits.
    ;
    _Bit2_Ball_Dir_Left{2} = 1 : _Bit3_Ball_Dir_Right{3} = 0
 
-__Skip_Ball_Right
+   score = score + 1
 
-    set debug cyclescore
+__Skip_Ball_Right
 
     ;***************************************************************
     ;
@@ -594,9 +667,17 @@ __Skip_Ball_Right
     ;
     goto __Start_Restart
 
+__Life_Loss
+    drawscreen
+    ; do an annoying buzzing sound for a second when you die
+    AUDC0 = 2 : AUDV0 = 8 : AUDF0 = 0
+    _life_loss_counter = _life_loss_counter + 1
+    if _life_loss_counter = 61 then _life_loss_counter = 0 : _life_loss_reset = 1 : goto gameloop
+    goto __Life_Loss
+
 gameover_loop
     drawscreen
-    ; do an annoying buzzing sound forever when you die
-    AUDC0 = 2 : AUDV0 = 8 : AUDF0 = 0
+    ; mute the annoying buzzer
+    AUDC0 = 0 : AUDV0 = 0 : AUDF0 = 0
     if joy0fire || switchreset then goto __Start_Restart
     goto gameover_loop
