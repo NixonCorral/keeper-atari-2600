@@ -6,7 +6,7 @@ The Keeper is split into eight chunks, which form a perimeter around the ball. H
 
 A single point is awarded for each time the ball collides with the Keeper, regardless of whether or not the timing constraint was met. If you fail to keep the ball within the Keeper and it touches the edge of the screen, you will lose a life. You have three lives with which to shoot for your next high score.
 
-*Keeper* features two gameplay modes whose fundamental gameplay is the same but that vary slightly. They can be toggled by holding the Select switch on your Atari VCS or emulator.
+*Keeper* features two gameplay modes whose fundamentals are the same but that do vary slightly. They can be toggled by holding the Select switch on your Atari VCS or emulator.
 
 Game Mode 1 is the default mode. It features a small ball. It also features Trackers, which follow the ball and hug the Keeper at all times. This makes it easier to determine when the ball is about to be at the edge of the Keeper, since it will be invisible most of the time.
 
