@@ -1,9 +1,55 @@
+    ;***************************************************************
+    ;
+    ;  Keeper
+    ;  Game by Clayton Anderson
+    ;
+    ;```````````````````````````````````````````````````````````````
+    ;
+    ;  Instructions:
+    ;
+    ;  A ball appears in the middle of the screen. You must press in
+    ;  one of the eight joystick directions and press the fire button
+    ;  to make the corresponding chunk of the Keeper appear. It will
+    ;  reflect the ball. If you do so within 6 frames of collision,
+    ;  the ball will reduce in speed. If you do so outside this window,
+    ;  it will increase in speed. It will only increase up to five times,
+    ;  and it cannot be reduced beyond its initial speed. Points are
+    ;  earned for every time the ball is successfully deflected. You
+    ;  are given three lives, which are lost if you allow the ball to go
+    ;  out of bounds. If you lose all three, it's Game Over.
+    ;  
+    ;  There are two game modes that can be toggled using the Select switch.
+    ;  Further details on these modes can be found in the README.
+    ;
+    ;```````````````````````````````````````````````````````````````
+    ;
+    ;  Warning:
+    ;
+    ;  An unfortunate reality of working with batari Basic is that
+    ;  a huge amount of its reference material is hosted on randomterrain.com.
+    ;  It has been an indispensable resource for me for 2600 development, and I
+    ;  have given credit below when code has been copied from example programs
+    ;  found on the Random Terrain website. However, said website has, at the 
+    ;  bottom of EVERY page, a bizarre "In Case You Didn't Know" section
+    ;  espousing a laundry list of anti-science beliefs. It's weird and sucks!
+    ;  Of course, I do not endorse those claims whatsoever.
+    ;
+    ;```````````````````````````````````````````````````````````````
+    ;
+    ;  The latest release of the batari Basic can be found here:
+    ;  https://github.com/batari-Basic/batari-Basic
+    ;
+    ;***************************************************************
+
     include 6lives.asm
     set romsize 4k
     set kernel_options no_blank_lines ; no_blank_lines means we lose missile0
     set optimization speed
     set optimization inlinerand
     set tv ntsc
+
+    ; clear the game mode var on initial boot but not on reset per Atari best practice
+    b = 0
 
 __Start_Restart
     ; clear playfield
@@ -27,7 +73,7 @@ __Start_Restart
 
     dim _Bit0_Reset_Restrainer = r
 
-    ; background color
+    ; background color (black)
     COLUBK = $01
     ; two-pixel wide ball and normal, single-color batariBasic playfield
     CTRLPF = $11
@@ -36,7 +82,7 @@ __Start_Restart
     score = 0
 
     ;```````````````````````````````````````````````````````````````
-    ;  Ball direction bits.
+    ;  Ball direction bits handled with one var.
     ;
     dim _BitOp_Ball_Dir = h
     dim _Bit0_Ball_Dir_Up = h
@@ -56,14 +102,11 @@ __Start_Restart
     ; determines playfield shape
     dim _playfield_shape = p
 
-    dim _ball_vel_x = c
-    dim _ball_vel_y = d
-
-
     ;***************************************************************
     ;
-    ;  Defines the edges of the playfield for the ball. If the
-    ;  ball is a different size, you'll need to adjust the numbers.
+    ;  Defines the edges of the playfield for the ball.
+    ;  This is technically incorrect for big ball mode (Mode 2), but
+    ;  it does not affect gameplay.
     ;
     const _B_Edge_Top = 2
     const _B_Edge_Bottom = 88
@@ -71,14 +114,14 @@ __Start_Restart
     const _B_Edge_Right = 160
 
     ;***************************************************************
-    ; variables that count how long to play sound effects (speed up or down)
+    ;  variables that count how long to play sound effects when the ball
+    ;  starts going faster or slower
+    ;
     dim _speed_up_countdown = t
     dim _speed_down_countdown = u
 
-    ;***************************************************************
-    ; starting positions for ball
-
-    ballx = 71
+    ;  starting positions and size for ball
+    ballx = 75
     bally = 40
     ballheight = 2
 
@@ -91,11 +134,7 @@ __Start_Restart
 
     temp5 = rand : if temp5 < 128 then _Bit2_Ball_Dir_Left{2} = 0 : _Bit3_Ball_Dir_Right{3} = 1
 
-
-    ;***************************************************************
-    ;
     ;  Bally starting direction is random as well.
-    ;
     _Bit1_Ball_Dir_Down{1} = 1 : _Bit0_Ball_Dir_Up{0} = 0
 
     if temp5 < 128 then _Bit1_Ball_Dir_Down{1} = 0 : _Bit0_Ball_Dir_Up{0} = 1
@@ -103,15 +142,16 @@ __Start_Restart
     ; require the fire button to be pressed to start the game
     dim _game_started = w
 
-    ; variable for the ball speed increase
+    ; variable for the ball speed increase (don't think const supports floating point values)
     dim _ratio = k.l
     _ratio = 0.51
+
+    ; counts the number of times the ball speed has been increased
     dim _ratio_increases = v
 
     ; variable for time since fire was pressed
     dim _fire_time = e
-    dim _fire_time_late = q
-    _fire_time_late = 6
+    const _fire_time_late = 6
 
     ; variable for time since fire was released (so players can't spam)
     dim _fire_release_time = a
@@ -121,6 +161,10 @@ __Start_Restart
     if _Mode_Val > 1 then _Mode_Val = 0
     dim _Select_Counter = m
 
+    ; best practice dictates that if mode select is open for 30 seconds or so, return to Idle state
+    dim _Mode_Select_Idle_Frames = c
+    dim _Mode_Select_Idle_Seconds = d
+
     ; variable for counting how long since you lost a life
     dim _life_loss_counter = f
     _life_loss_counter = 0
@@ -128,68 +172,47 @@ __Start_Restart
     dim _life_loss_reset = g
 
     ; initiate lives to 3 and use the compact spacing
+    ; lives vars are used by the 6lives minikernel included above
     dim lives_compact = 1
     lives = 96
 
     ; set lives sprite to a little heart
- lives:
-   %00010000
-   %00111000
-   %01111100
-   %11111110
-   %11111110
-   %01101100
-   %00000000
-   %00000000
+    lives:
+    %00010000
+    %00111000
+    %01111100
+    %11111110
+    %11111110
+    %01101100
+    %00000000
+    %00000000
 end
 
-   ;***************************************************************
-   ;
-   ;  Defines shape of player0 sprite.
-   ;
-   player0:
-   %11111111
+    ;  Defines shape of player0 sprite.
+    player0:
+    %11111111
 end
 
-   ;***************************************************************
-   ;
-   ;  Defines shape of player0 sprite.
-   ;
-   player1:
-   %1
-   %1
-   %1
-   %1
-   %1
-   %1
-   %1
-end
-
- ; Xs are playfield color (green) and dots are background color (black)
- playfield:
-................................ 
-................................
-................................
-................................
-................................
-................................
-................................
-................................
-................................
-................................
-................................
+    ;  Defines shape of player0 sprite.
+    player1:
+    %1
+    %1
+    %1
+    %1
+    %1
+    %1
+    %1
 end
 
 gameloop
+    
+    ; *************************************************************
+    ;  a couple sprites need to be redefined each time because the mode select
+    ;  routine fucks them up (and I don't know how to fix that lol)
 
-   ; a couple sprites need to be redefined each time because the reset routine fucks them up
-
-   ;***************************************************************
-   ;
-   ;  Defines shape of player0 sprite.
-   ;
-   player0:
-   %11111111
+    ;  Defines shape of player0 sprite.
+    player0:
+    %11111111
 end
 
     ; set lives sprite to a little heart
@@ -203,31 +226,50 @@ end
    %00000000
    %00000000
 end
-    player0x = ballx - 3
+
+    ; two little paddle-like objects track the ball in Mode 1
+    ; so it is easier to tell when it is near the barrier
+    if _Mode_Val > 0 then goto __Skip_Trackers
+    player0x = ballx - 4
     if _Bit1_Ball_Dir_Down{1} then player0y = 81 else player0y = 7
     if _Bit3_Ball_Dir_Right{3} then player1x = 134 else player1x = 13
     player1y = bally + 3
+    goto __Skip_Offscreen_Trackers
+__Skip_Trackers
+    ; Trackers do not appear in Mode 2
+    player0y = 200
+    player1y = 200
+__Skip_Offscreen_Trackers
+
+    ; if they're mashing that select switch you better do what they say
     if !switchselect then goto __Done_Select
     goto __Select_Mode
 __Done_Select
 
+    ; *********************************************************************
+    ;  lives are represented in increments of 32 for some computer-related reasons
+    ;  that you can probably guess, or at least I hope so, since I don't know the specifics
+    ;
     if lives < 32 then goto gameover_loop
+
     ; reset game state when new life starts
-    if _life_loss_reset > 0 then ballx = 71 : bally = 40 : _ratio = 0.51 : _ratio_increases = 0 : _fire_time = 0 : _life_loss_reset = 0
-    ;***************************************************************
-    ; decrease value of hit sound counters every frame until they stop playing
+    if _life_loss_reset > 0 then ballx = 75 : bally = 40 : _ratio = 0.51 : _ratio_increases = 0 : _fire_time = 0 : _life_loss_reset = 0
+
+    ; we only want one of the sounds to be playing at once, specifically the one that most recently started
     if _speed_down_countdown >= _speed_up_countdown then _speed_up_countdown = 0
     if _speed_up_countdown > _speed_down_countdown then _speed_down_countdown = 0
+
+    ; decrease value of hit sound counters every frame until they stop playing
     if _speed_up_countdown > 0 then _speed_up_countdown = _speed_up_countdown - 1 : AUDC0 = 7 : AUDV0 = 4 : AUDF0 = _speed_up_countdown else AUDV0 = 0
     if _speed_down_countdown > 0 then _speed_down_countdown = _speed_down_countdown - 1 : AUDC1 = 10 : AUDV1 = 4 : AUDF1 = 30 - _speed_down_countdown else AUDV1 = 0
 
-    ; color of playfield and ball
+    ; color of playfield and ball (blue)
     COLUPF = $AA
-    ; color of player (and missile) 1
+    ; color of player (and missile) 1 (grayish)
     COLUP0 = $0A
-    ; color of player (and missile) 2
+    ; color of player (and missile) 2 (grayish)
     COLUP1 = $0A
-    ; color of lives indicator
+    ; color of lives indicator (yellow)
     lifecolor = $FF
 
     if _Mode_Val < 1 then goto __Skip_Mode_2
@@ -236,6 +278,7 @@ __Done_Select
     ballheight = 4
     goto __Skip_Mode_1
 __Skip_Mode_2
+    ; two-pixel wide/tall ball and normal, single-color batariBasic playfield
     CTRLPF = $11
     ballheight = 2
 __Skip_Mode_1
@@ -249,8 +292,19 @@ __Skip_Mode_1
     ; use joystick location to determine playfield shape, represented here as a phone keypad position
     if joy0fire then goto __Select_Pf
     _fire_release_time = _fire_release_time + 1
+
+    ; `````````````````````````````````````````````````````````````````````````````
+    ;  fire button needs to be released for at least five frames for it to count
+    ;  this is effectively a spam-prevention mechanism. the barrier chunk will still
+    ;  appear, but it may still speed up the ball.
+    ; 
     if _fire_release_time > 5 then _fire_time = 0 : goto _Pf_5 else _fire_time = _fire_time + 1 : goto _Pf_5
     
+
+    ; `````````````````````````````````````````````````````````````````````````````
+    ;  this is where we determine which chunk of the Keeper is active (if any).
+    ;  if the fire button is pressed and the joystick is also pressed in any direction,
+    ;  the corresponding edge/corner of the keeper will appear and be active.
 
 __Select_Pf
     _fire_time = _fire_time + 1
@@ -403,9 +457,12 @@ _End_Pf
 
     ; Ball is on screen within the bounds of the keeper
     if bally > _B_Edge_Top + 6 && bally < _B_Edge_Bottom - 6 && ballx > _B_Edge_Left + 17 && ballx < _B_Edge_Right - 17 then goto __Ball_In_Play
+
     ; Ball has hit the edge of the screen, causing a loss of life
     if bally <= _B_Edge_Top || bally >= _B_Edge_Bottom then lives = lives - 32 : goto __Life_Loss
     if ballx <= _B_Edge_Left || ballx >= _B_Edge_Right then lives = lives - 32 : goto __Life_Loss
+
+    ; Ball is heading to the edge of the screen but is not there yet
 
     if !_Bit0_Ball_Dir_Up{0} then goto __Skip_Dead_Ball_Up
     _B_Y = _B_Y - 0.50
@@ -420,6 +477,16 @@ __Skip_Dead_Ball_Left
     _B_X = _B_X + 0.50
 __Skip_Dead_Ball_Right
     goto gameloop
+
+   ;```````````````````````````````````````````````````````````````
+   ;  This section deals with detecting the ball's collision with the
+   ;  Keeper (the playfield). This was lifted HEAVILY from the
+   ;  Collision Prevention example program at Random Terrain.
+   ;  https://www.randomterrain.com/atari-2600-memories-batari-basic-commands.html#collision
+   ;
+   ;  My additions are detecting whether or not the Keeper was activated
+   ;  in the last 6 frames (and speeding up or slowing down the ball accordingly),
+   ;  as well as incrementing the score on each hit.
 
 __Ball_In_Play
    ;***************************************************************
@@ -553,8 +620,6 @@ __Skip_Slow_Down
    score = score + 1
 
 __Skip_Ball_Down
-
-
 
    ;***************************************************************
    ;
@@ -713,11 +778,23 @@ __Skip_Ball_Right
 
 __Life_Loss
     drawscreen
-    ; do an annoying buzzing sound for a second when you die
+    ; do an annoying buzzing sound for a second when you die, then start again minus a life
     AUDC0 = 2 : AUDV0 = 8 : AUDF0 = 0
     _life_loss_counter = _life_loss_counter + 1
     if _life_loss_counter = 61 then _life_loss_counter = 0 : _life_loss_reset = 1 : goto gameloop
     goto __Life_Loss
+
+    ;```````````````````````````````````````````````````````````````
+    ;  This section handles mode select. There are only two modes, 
+    ;  and the only difference in them is that the ball is bigger
+    ;  in the second mode. Because it uses the same collision data
+    ;  as the small ball, though, it is a bit harder.
+    ;
+    ;  Some of this logic was lifted from the Random Terrain Select
+    ;  Switch example.
+    ;
+    ;  https://www.randomterrain.com/atari-2600-memories-batari-basic-commands.html#switchselect
+    ;
 
 __Select_Mode
     ; color of playfield and ball
@@ -727,7 +804,7 @@ __Select_Mode
     ; color of lives indicator
     lifecolor = $FF
     ; reset game state and display ball
-    ballx = 71 : bally = 40 : _ratio = 0.51 : _ratio_increases = 0 : _fire_time = 0 : _life_loss_reset = 0 : lives = 96 : score = 0
+    ballx = 75 : bally = 40 : _ratio = 0.51 : _ratio_increases = 0 : _fire_time = 0 : _life_loss_reset = 0 : lives = 96 : score = 0
     drawscreen
     ;```````````````````````````````````````````````````````````````
     ; Show mode select indicator (player0 in our case)
@@ -737,19 +814,19 @@ __Select_Mode
 
     if _Mode_Val > 0 then goto __Skip_One
 
-   ;***************************************************************
-   ;
-   ;  Defines shape of player0 sprite.
-   ;
-   player0:
-   %11111110
-   %00010000
-   %00010000
-   %00010000
-   %10010000
-   %01010000
-   %00110000
-   %00000000
+    ; displays tracker not currently in use for mode selection number
+    player1y = bally + 3
+
+    ;  Defines shape of player0 sprite (a one)
+    player0:
+    %11111110
+    %00010000
+    %00010000
+    %00010000
+    %10010000
+    %01010000
+    %00110000
+    %00000000
 end
     ; two-pixel wide/tall ball and normal, single-color batariBasic playfield
     CTRLPF = $11
@@ -759,19 +836,18 @@ end
 
 __Skip_One
 
-   ;***************************************************************
-   ;
-   ;  Defines shape of player0 sprite.
-   ;
-   player0:
-   %11111110
-   %10000000
-   %10000000
-   %11111110
-   %00000010
-   %00000010
-   %11111110
-   %00000000
+    ;  moves Tracker off screen
+    player1y = 200
+    ;  Defines shape of player0 sprite (a two)
+    player0:
+    %11111110
+    %10000000
+    %10000000
+    %11111110
+    %00000010
+    %00000010
+    %11111110
+    %00000000
 end
     CTRLPF = $21
     ballheight = 4
@@ -799,6 +875,18 @@ __Skip_Two
 
 __Skip_Mode_Switch
 
+    ;```````````````````````````````````````````````````````````````
+    ;  Per Atari 2600 Standards and Procedures, Select Mode should exit
+    ;  after 30 seconds or so and return to the idle state.
+    ;
+    ;  https://www.randomterrain.com/atari-2600-memories-standards-and-procedures.html#leaving_game_select
+    ;
+    _Mode_Select_Idle_Frames = _Mode_Select_Idle_Frames + 1
+    if _Mode_Select_Idle_Frames > 59 then _Mode_Select_Idle_Frames = 0 : _Mode_Select_Idle_Seconds = _Mode_Select_Idle_Seconds + 1
+    if _Mode_Select_Idle_Seconds > 29 then _Mode_Select_Idle_Frames = 0 : _Mode_Select_Idle_Seconds = 0 : _game_started = 0 : goto gameloop
+
+    ; fire should start the game with the current settings according
+    ; to Atari 2600 best development practices.
     if joy0fire then goto gameloop
 
     ;***************************************************************
@@ -830,5 +918,10 @@ gameover_loop
     drawscreen
     ; mute the annoying buzzer
     AUDC0 = 0 : AUDV0 = 0 : AUDF0 = 0
+    ; wait for a button press or reset to return to gameplay.
     if joy0fire || switchreset then goto __Start_Restart
+    ; alternatively, a new mode can be selected.
+    if !switchselect then goto __Done_Select_Game_Over
+    goto __Select_Mode
+__Done_Select_Game_Over
     goto gameover_loop
