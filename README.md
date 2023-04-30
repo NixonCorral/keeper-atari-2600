@@ -13,3 +13,5 @@ Game Mode 1 is the default mode. It features a small ball. It also features Trac
 Game Mode 2 features a larger ball and does not have Trackers. Consider trying this more challenging mode when you have mastered Game Mode 1.
 
 If you wish to play this game, please download the latest binary from the Releases section. The easiest way to run it would be to use the [Stella Emulator](https://stella-emu.github.io/). If you want a more faithful experience, you could also load it onto a [Harmony Cartridge](https://harmony.atariage.com/Site/Harmony.html) or perhaps run it on a [MiSTer](https://mister-devel.github.io/MkDocs_MiSTer/) setup for analog video output.
+
+Bear in mind that the file size is four (4) kilobytes, so please make sure you have enough room on your storage device.
