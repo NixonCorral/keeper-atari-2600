@@ -121,8 +121,8 @@ __Start_Restart
     dim _speed_down_countdown = u
 
     ;  starting positions and size for ball
-    ballx = 75
-    bally = 40
+    ballx = (rand&31) + 60
+    bally = 35
     ballheight = 2
 
     ;***************************************************************
@@ -142,7 +142,7 @@ __Start_Restart
     ; require the fire button to be pressed to start the game
     dim _game_started = w
 
-    ; variable for the ball speed increase (don't think const supports floating point values)
+    ; variable for the ball speed increase
     dim _ratio = k.l
     _ratio = 0.51
 
@@ -151,14 +151,13 @@ __Start_Restart
 
     ; variable for time since fire was pressed
     dim _fire_time = e
-    const _fire_time_late = 6
+    const _fire_time_late = 5
 
     ; variable for time since fire was released (so players can't spam)
     dim _fire_release_time = a
 
     ; variables for which game mode we're on and how long it's been since we pushed select
     dim _Mode_Val = b
-    if _Mode_Val > 1 then _Mode_Val = 0
     dim _Select_Counter = m
 
     ; best practice dictates that if mode select is open for 30 seconds or so, return to Idle state
@@ -168,8 +167,6 @@ __Start_Restart
     ; variable for counting how long since you lost a life
     dim _life_loss_counter = f
     _life_loss_counter = 0
-
-    dim _life_loss_reset = g
 
     ; initiate lives to 3 and use the compact spacing
     ; lives vars are used by the 6lives minikernel included above
@@ -184,8 +181,6 @@ __Start_Restart
     %11111110
     %11111110
     %01101100
-    %00000000
-    %00000000
 end
 
     ;  Defines shape of player0 sprite.
@@ -193,7 +188,7 @@ end
     %11111111
 end
 
-    ;  Defines shape of player0 sprite.
+    ;  Defines shape of player1 sprite.
     player1:
     %1
     %1
@@ -229,10 +224,10 @@ end
 
     ; two little paddle-like objects track the ball in Mode 1
     ; so it is easier to tell when it is near the barrier
-    if _Mode_Val > 0 then goto __Skip_Trackers
+    if _Mode_Val & 1 then goto __Skip_Trackers
     player0x = ballx - 4
-    if _Bit1_Ball_Dir_Down{1} then player0y = 81 else player0y = 7
-    if _Bit3_Ball_Dir_Right{3} then player1x = 134 else player1x = 13
+    if _Bit1_Ball_Dir_Down{1} then player0y = 80 else player0y = 8
+    if _Bit3_Ball_Dir_Right{3} then player1x = 133 else player1x = 14
     player1y = bally + 3
     goto __Skip_Offscreen_Trackers
 __Skip_Trackers
@@ -242,9 +237,7 @@ __Skip_Trackers
 __Skip_Offscreen_Trackers
 
     ; if they're mashing that select switch you better do what they say
-    if !switchselect then goto __Done_Select
-    goto __Select_Mode
-__Done_Select
+    if switchselect then goto __Select_Mode
 
     ; *********************************************************************
     ;  lives are represented in increments of 32 for some computer-related reasons
@@ -253,7 +246,7 @@ __Done_Select
     if lives < 32 then goto gameover_loop
 
     ; reset game state when new life starts
-    if _life_loss_reset > 0 then ballx = 75 : bally = 40 : _ratio = 0.51 : _ratio_increases = 0 : _fire_time = 0 : _life_loss_reset = 0
+    if _life_loss_counter > 60 then ballx = (rand&31) + 60 : bally = 35 : _ratio = 0.51 : _ratio_increases = 0 : _fire_time = 0 : _life_loss_counter = 0
 
     ; we only want one of the sounds to be playing at once, specifically the one that most recently started
     if _speed_down_countdown >= _speed_up_countdown then _speed_up_countdown = 0
@@ -298,7 +291,7 @@ __Skip_Mode_1
     ;  this is effectively a spam-prevention mechanism. the barrier chunk will still
     ;  appear, but it may still speed up the ball.
     ; 
-    if _fire_release_time > 5 then _fire_time = 0 : goto _Pf_5 else _fire_time = _fire_time + 1 : goto _Pf_5
+    if _fire_release_time > 12 then _fire_time = 0 : goto _Pf_5 else _fire_time = _fire_time + 1 : goto _Pf_5
     
 
     ; `````````````````````````````````````````````````````````````````````````````
@@ -370,7 +363,15 @@ end
  goto _End_Pf
 
 _Pf_4
- playfield:
+ pfclear
+    var12 = %10000000
+    var16 = %10000000
+    var20 = %10000000
+    var24 = %10000000
+    var28 = %10000000
+
+ ; same as
+ /* playfield:
 ................................
 ................................
 ................................
@@ -382,7 +383,7 @@ X...............................
 ................................
 ................................
 ................................
-end
+end */
  goto _End_Pf
 
 _Pf_5
@@ -390,7 +391,15 @@ _Pf_5
  goto _End_Pf
 
 _Pf_6
- playfield:
+ pfclear
+    var15 = %10000000
+    var19 = %10000000
+    var23 = %10000000
+    var27 = %10000000
+    var31 = %10000000
+
+ ; same as
+ /* playfield:
 ................................
 ................................
 ................................
@@ -402,7 +411,7 @@ _Pf_6
 ................................
 ................................
 ................................
-end
+end */
  goto _End_Pf
 
 _Pf_7
@@ -438,7 +447,12 @@ end
  goto _End_Pf
 
 _Pf_9
- playfield:
+ pfclear
+                     var35 = %10000000
+                     var39 = %10000000
+ var42 = %00000001 : var43 = %11111111
+ ; same as
+ /* playfield:
 ................................
 ................................
 ................................
@@ -450,7 +464,7 @@ _Pf_9
 ...............................X
 ...............................X
 .......................XXXXXXXXX
-end
+end */
  goto _End_Pf
 
 _End_Pf
@@ -489,6 +503,7 @@ __Skip_Dead_Ball_Right
    ;  as well as incrementing the score on each hit.
 
 __Ball_In_Play
+
    ;***************************************************************
    ;
    ;  Clears ball hits.
@@ -519,7 +534,7 @@ __Ball_In_Play
    ;
    temp5 = (ballx-18)/4
 
-   temp6 = (bally-2)/8
+   temp6 = (bally-2-_Mode_Val-_Mode_Val)/8
 
    if temp5 < 34 then if pfread(temp5,temp6) then _Bit4_Ball_Hit_UD{4} = 1 : goto __Reverse_Ball_Up
 
@@ -546,8 +561,8 @@ __Reverse_Ball_Up
    ; Increases speed if fire time was too early. Decreases if it was on time
    ;
 
-    if _fire_time >= _fire_time_late && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Up
-    if _fire_time < _fire_time_late && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
+    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Up
+    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
 __Skip_Slow_Up
     
 
@@ -608,8 +623,8 @@ __Reverse_Ball_Down
    ; Increases speed if fire time was too early. Decreases if it was on time
    ;
 
-    if _fire_time >= _fire_time_late && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Down
-    if _fire_time < _fire_time_late && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
+    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Down
+    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
 __Skip_Slow_Down
 
    ;```````````````````````````````````````````````````````````````
@@ -672,8 +687,8 @@ __Reverse_Ball_Left
    ; Increases speed if fire time was too early. Decreases if it was on time
    ;
 
-    if _fire_time >= _fire_time_late && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Left
-    if _fire_time < _fire_time_late && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
+    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Left
+    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
 __Skip_Slow_Left
 
    ;```````````````````````````````````````````````````````````````
@@ -706,7 +721,8 @@ __Skip_Ball_Left
    ;
    temp5 = (bally)/8
 
-   temp6 = (ballx-16)/4
+   ; ball is two pixels wider in mode 2, so add that var here twice and save a variable
+   temp6 = (ballx-16+_Mode_Val+_Mode_Val)/4
 
    if temp6 < 34 then if pfread(temp6,temp5) then goto __Reverse_Ball_Right
 
@@ -738,8 +754,8 @@ __Reverse_Ball_Right
    ; Increases speed if fire time was too early. Decreases if it was on time
    ;
 
-    if _fire_time >= _fire_time_late && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Right
-    if _fire_time < _fire_time_late && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
+    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Right
+    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
 __Skip_Slow_Right
 
    ;```````````````````````````````````````````````````````````````
@@ -781,8 +797,13 @@ __Life_Loss
     ; do an annoying buzzing sound for a second when you die, then start again minus a life
     AUDC0 = 2 : AUDV0 = 8 : AUDF0 = 0
     _life_loss_counter = _life_loss_counter + 1
-    if _life_loss_counter = 61 then _life_loss_counter = 0 : _life_loss_reset = 1 : goto gameloop
-    goto __Life_Loss
+    if _life_loss_counter = 61 then goto gameloop
+    ; in the off chance they hit the select switch during this routine, honor it
+    if switchselect then goto __Select_Mode
+    ; same with reset
+    if !switchreset then _Bit0_Reset_Restrainer{0} = 0 : goto __Life_Loss
+    if _Bit0_Reset_Restrainer{0} then goto __Life_Loss
+    goto __Start_Restart
 
     ;```````````````````````````````````````````````````````````````
     ;  This section handles mode select. There are only two modes, 
@@ -797,14 +818,14 @@ __Life_Loss
     ;
 
 __Select_Mode
-    ; color of playfield and ball
-    COLUPF = $AA
+    ; mute audio for edge case where Select switch is pressed during gameplay
+    AUDC0 = 0 : AUDV0 = 0 : AUDF0 = 0
     ; color of player (and missile) 1
     COLUP0 = $0A
     ; color of lives indicator
     lifecolor = $FF
     ; reset game state and display ball
-    ballx = 75 : bally = 40 : _ratio = 0.51 : _ratio_increases = 0 : _fire_time = 0 : _life_loss_reset = 0 : lives = 96 : score = 0
+    ballx = 60 : bally = 35 : _ratio = 0.51 : _ratio_increases = 0 : _fire_time = 0 : _life_loss_counter = 0 : lives = 96 : score = 0
     drawscreen
     ;```````````````````````````````````````````````````````````````
     ; Show mode select indicator (player0 in our case)
@@ -826,7 +847,6 @@ __Select_Mode
     %10010000
     %01010000
     %00110000
-    %00000000
 end
     ; two-pixel wide/tall ball and normal, single-color batariBasic playfield
     CTRLPF = $11
@@ -847,7 +867,6 @@ __Skip_One
     %00000010
     %00000010
     %11111110
-    %00000000
 end
     CTRLPF = $21
     ballheight = 4
@@ -869,9 +888,9 @@ __Skip_Two
     _Select_Counter = 0
 
     ;```````````````````````````````````````````````````````````````
-    ;  Adds one to the select color variable.
+    ;  Toggles Mode
     ;
-    _Mode_Val = _Mode_Val + 1 : if _Mode_Val > 1 then _Mode_Val = 0
+    _Mode_Val = _Mode_Val ^ 1
 
 __Skip_Mode_Switch
 
@@ -887,7 +906,7 @@ __Skip_Mode_Switch
 
     ; fire should start the game with the current settings according
     ; to Atari 2600 best development practices.
-    if joy0fire then goto gameloop
+    if joy0fire then goto __Start_Restart
 
     ;***************************************************************
     ;
@@ -918,10 +937,11 @@ gameover_loop
     drawscreen
     ; mute the annoying buzzer
     AUDC0 = 0 : AUDV0 = 0 : AUDF0 = 0
-    ; wait for a button press or reset to return to gameplay.
-    if joy0fire || switchreset then goto __Start_Restart
+    ; wait for a button press to return to gameplay.
+    if joy0fire then goto __Start_Restart
     ; alternatively, a new mode can be selected.
-    if !switchselect then goto __Done_Select_Game_Over
-    goto __Select_Mode
-__Done_Select_Game_Over
-    goto gameover_loop
+    if switchselect then goto __Select_Mode
+    ; reset check
+    if !switchreset then _Bit0_Reset_Restrainer{0} = 0 : goto gameover_loop
+    if _Bit0_Reset_Restrainer{0} then goto gameover_loop
+    goto __Start_Restart
