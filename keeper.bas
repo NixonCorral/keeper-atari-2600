@@ -149,9 +149,12 @@ __Start_Restart
     ; counts the number of times the ball speed has been increased
     dim _ratio_increases = v
 
+    ; indicates whether a collision happened last frame
+    dim _just_collided = y
+
     ; variable for time since fire was pressed
     dim _fire_time = e
-    const _fire_time_late = 5
+    const _fire_time_late = 7
 
     ; variable for time since fire was released (so players can't spam)
     dim _fire_release_time = a
@@ -331,7 +334,10 @@ end
  goto _End_Pf
 
 _Pf_2
- playfield:
+ pfclear
+    var1 = %11111110
+    var2 = %11111110
+ /* playfield:
 .........XXXXXXXXXXXXXX......... 
 ................................
 ................................
@@ -342,8 +348,8 @@ _Pf_2
 ................................
 ................................
 ................................
-................................
-end
+................................ 
+end*/
  goto _End_Pf
 
 _Pf_3
@@ -431,7 +437,10 @@ end
  goto _End_Pf
 
 _Pf_8
- playfield:
+ pfclear
+    var41 = %11111110
+    var42 = %11111110
+ /* playfield:
 ................................
 ................................
 ................................
@@ -443,7 +452,7 @@ _Pf_8
 ................................
 ................................
 .........XXXXXXXXXXXXXX.........
-end
+end */
  goto _End_Pf
 
 _Pf_9
@@ -477,7 +486,6 @@ _End_Pf
     if ballx <= _B_Edge_Left || ballx >= _B_Edge_Right then lives = lives - 32 : goto __Life_Loss
 
     ; Ball is heading to the edge of the screen but is not there yet
-
     if !_Bit0_Ball_Dir_Up{0} then goto __Skip_Dead_Ball_Up
     _B_Y = _B_Y - 0.50
 __Skip_Dead_Ball_Up
@@ -504,6 +512,9 @@ __Skip_Dead_Ball_Right
 
 __Ball_In_Play
 
+    ; if there is a hit, this will = 1
+    temp3 = 0
+
    ;***************************************************************
    ;
    ;  Clears ball hits.
@@ -513,8 +524,6 @@ __Ball_In_Play
    ;
    _Bit4_Ball_Hit_UD{4} = 0
 
-
-
    ;***************************************************************
    ;
    ;  Ball up check.
@@ -523,11 +532,6 @@ __Ball_In_Play
    ;  Skips this section if ball isn't moving up.
    ;
    if !_Bit0_Ball_Dir_Up{0} then goto __Skip_Ball_Up
-
-   ;```````````````````````````````````````````````````````````````
-   ;  Changes direction if hitting the edge.
-   ;
-   if bally <= _B_Edge_Top then goto __Reverse_Ball_Up
 
    ;```````````````````````````````````````````````````````````````
    ;  Changes direction if a playfield pixel is in the way.
@@ -553,29 +557,26 @@ __Reverse_Ball_Up
    ;  Mixes things up a bit to keep the ball from getting caught
    ;  in a pattern.
    ;
-   _B_Y = _B_Y + 0.130
+   _B_Y = _B_Y + 0.131
 
    temp5 = rand : if temp5 < 128 then _B_Y = _B_Y + 0.130
-
-   ;```````````````````````````````````````````````````````````````
-   ; Increases speed if fire time was too early. Decreases if it was on time
-   ;
-
-    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Up
-    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
-__Skip_Slow_Up
-    
+   temp3 = 1
 
    ;```````````````````````````````````````````````````````````````
    ;  Reverses the direction bits.
    ;
    _Bit0_Ball_Dir_Up{0} = 0 : _Bit1_Ball_Dir_Down{1} = 1
 
-   score = score + 1
+   ;```````````````````````````````````````````````````````````````
+   ; Increases speed if fire time was too early. Decreases if it was on time
+   ; Skips this logic and score increase if we just had a collision. This prevents "pinches."
+   ;
 
+    if _just_collided > 0 then goto __Skip_Ball_Up
+    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Up
+    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
+__Skip_Slow_Up
 __Skip_Ball_Up
-
-
 
    ;***************************************************************
    ;
@@ -585,11 +586,6 @@ __Skip_Ball_Up
    ;  Skips this section if ball isn't moving down.
    ;
    if !_Bit1_Ball_Dir_Down{1} then goto __Skip_Ball_Down
-
-   ;```````````````````````````````````````````````````````````````
-   ;  Changes direction if hitting the edge.
-   ;
-   if bally >= _B_Edge_Bottom then goto __Reverse_Ball_Down
 
    ;```````````````````````````````````````````````````````````````
    ;  Changes direction if a playfield pixel is in the way.
@@ -618,22 +614,22 @@ __Reverse_Ball_Down
    _B_Y = _B_Y - 0.261
 
    temp5 = rand : if temp5 < 128 then _B_Y = _B_Y - 0.261
-
-   ;```````````````````````````````````````````````````````````````
-   ; Increases speed if fire time was too early. Decreases if it was on time
-   ;
-
-    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Down
-    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
-__Skip_Slow_Down
+   temp3 = 1
 
    ;```````````````````````````````````````````````````````````````
    ;  Reverses the direction bits.
    ;
    _Bit0_Ball_Dir_Up{0} = 1 : _Bit1_Ball_Dir_Down{1} = 0
 
-   score = score + 1
+   ;```````````````````````````````````````````````````````````````
+   ; Increases speed if fire time was too early. Decreases if it was on time
+   ; Skips this logic and score increase if we just had a collision. This prevents "pinches."
+   ;
 
+    if _just_collided > 0 then goto __Skip_Ball_Down
+    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Down
+    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
+__Skip_Slow_Down
 __Skip_Ball_Down
 
    ;***************************************************************
@@ -644,11 +640,6 @@ __Skip_Ball_Down
    ;  Skips this section if ball isn't moving left.
    ;
    if !_Bit2_Ball_Dir_Left{2} then goto __Skip_Ball_Left
-
-   ;```````````````````````````````````````````````````````````````
-   ;  Changes direction if hitting the edge.
-   ;
-   if ballx <= _B_Edge_Left then goto __Reverse_Ball_Left
 
    ;```````````````````````````````````````````````````````````````
    ;  Changes direction if a playfield pixel is in the way.
@@ -682,25 +673,23 @@ __Reverse_Ball_Left
    _B_X = _B_X + 0.388
 
    temp5 = rand : if temp5 < 128 then _B_X = _B_X + 0.388
-
-   ;```````````````````````````````````````````````````````````````
-   ; Increases speed if fire time was too early. Decreases if it was on time
-   ;
-
-    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Left
-    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
-__Skip_Slow_Left
+   temp3 = 1
 
    ;```````````````````````````````````````````````````````````````
    ;  Reverses the direction bits.
    ;
    _Bit2_Ball_Dir_Left{2} = 0 : _Bit3_Ball_Dir_Right{3} = 1
 
-    score = score + 1
+   ;```````````````````````````````````````````````````````````````
+   ; Increases speed if fire time was too early. Decreases if it was on time
+   ; Skips this logic and score increase if we just had a collision. This prevents "pinches."
+   ;
 
+    if _just_collided > 0 then goto __Skip_Ball_Left
+    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Left
+    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
+__Skip_Slow_Left
 __Skip_Ball_Left
-
-
 
    ;***************************************************************
    ;
@@ -710,11 +699,6 @@ __Skip_Ball_Left
    ;  Skips this section if ball isn't moving right.
    ;
    if !_Bit3_Ball_Dir_Right{3} then goto __Skip_Ball_Right
-
-   ;```````````````````````````````````````````````````````````````
-   ;  Changes direction if hitting the edge.
-   ;
-   if ballx >= _B_Edge_Right then goto __Reverse_Ball_Right
 
    ;```````````````````````````````````````````````````````````````
    ;  Changes direction if a playfield pixel is in the way.
@@ -749,23 +733,26 @@ __Reverse_Ball_Right
    _B_X = _B_X - 0.513
 
    temp5 = rand : if temp5 < 128 then _B_X = _B_X - 0.513
-
-   ;```````````````````````````````````````````````````````````````
-   ; Increases speed if fire time was too early. Decreases if it was on time
-   ;
-
-    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Right
-    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
-__Skip_Slow_Right
+   temp3 = 1
 
    ;```````````````````````````````````````````````````````````````
    ;  Reverses the direction bits.
    ;
    _Bit2_Ball_Dir_Left{2} = 1 : _Bit3_Ball_Dir_Right{3} = 0
 
-   score = score + 1
+   ;```````````````````````````````````````````````````````````````
+   ; Increases speed if fire time was too early. Decreases if it was on time
+   ; Skips this logic and score increase if we just had a collision. This prevents "pinches."
+   ;
 
+    if _just_collided > 0 then goto __Skip_Ball_Right
+    if _fire_time >= _fire_time_late + _ratio_increases && _ratio_increases < 5 then _ratio_increases = _ratio_increases + 1 : _ratio = _ratio + 0.25 : _speed_up_countdown = 30 : goto __Skip_Slow_Right
+    if _fire_time < _fire_time_late + _ratio_increases && _ratio_increases >= 1 then _ratio_increases = _ratio_increases - 1 : _ratio = _ratio - 0.25 : _speed_down_countdown = 30
+__Skip_Slow_Right
 __Skip_Ball_Right
+
+    if temp3 > 0 && _just_collided = 0 then score = score + 1
+    if temp3 > 0 then _just_collided = 1 else _just_collided = 0
 
     ;***************************************************************
     ;
